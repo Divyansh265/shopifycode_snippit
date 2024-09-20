@@ -1,0 +1,260 @@
+{% assign collection = collections[section.settings.collection_1] %}
+
+<div class="product-grid-1-1">
+  {% for product in collection.products %}
+    <div class="product-item" id="product-{{ product.id }}">
+      <div style="display:none">
+        {% for variant in product.variants %}
+          <div data="{{ variant.id }}" data_title="{{ variant.title }}">
+            {{ variant.title }}
+          </div>
+        {% endfor %}
+      </div>
+      <a href="{{ product.url }}">
+        <img src="{{ product.featured_image | img_url: 'large' }}" alt="Product Image" class="product-image">
+      </a>
+      <h3 class="product-title">{{ product.title }}</h3>
+      <p class="product-price">{{ product.price | money }}</p>
+
+      <input
+        type="hidden"
+        class="mtclass"
+        id="variant-id-{{ product.id }}"
+        value="{{ product.selected_or_first_available_variant.id }}"
+      >
+
+      {% for option in product.options_with_values %}
+        {% if option.name contains 'color' %}
+          <div class="custom-swatches-list">
+            {% for value in option.values %}
+              {% assign variant_image_source = '' %}
+              {% assign variant_id = '' %}
+
+              {% for variant in product.variants %}
+                {% if variant.option1 == value or variant.option2 == value or variant.option3 == value %}
+                  {% assign variant_image_source = variant.image | img_url: '1000x' %}
+                  {% assign variant_id = variant.id %}
+                  {% break %}
+                {% endif %}
+              {% endfor %}
+
+              <span
+                class="color-swatch color-{{ value | handleize }} {% if forloop.index==1 %}active {% endif %}"
+                data-image-source="{{ variant_image_source }}"
+                data-variant-id="{{ variant_id }}"
+                data_color="{{ value }}"
+                style="background-color:{{ value }}"
+              >
+              </span>
+            {% endfor %}
+          </div>
+        {% elsif option.name contains 'size' %}
+          <div class="size-options-list">
+            {% for value in option.values %}
+              {% assign variant_id = '' %}
+
+              {% for variant in product.variants %}
+                {% if variant.option1 == value or variant.option2 == value or variant.option3 == value %}
+                  {% assign variant_id = variant.id %}
+                  {% break %}
+                {% endif %}
+              {% endfor %}
+
+              <span
+                class="size-option {% if forloop.index==1 %}active {% endif %}"
+                data-variant-id="{{ variant_id }}"
+                data_size="{{ value }}"
+                style="padding: 5px; border: 1px solid #ddd; margin: 2px; display: inline-block;"
+              >
+                {{ value }}
+              </span>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endfor %}
+
+      <!-- Quantity selection -->
+      <div class="quantity_container">
+        <quantity-input class="quantity" data-url="{{ product.url }}" data-section="{{ section.id }}">
+          <button class="quantity__button" name="minus" type="button">
+            <span class="visually-hidden">
+              {{- 'products.product.quantity.decrease' | t: product: product.title | escape -}}
+            </span>
+            {% render 'icon-minus' %}
+          </button>
+          <input
+            class="quantity__input"
+            type="number"
+            name="quantity"
+            id="Quantity-{{ product.id }}"
+            data-cart-quantity="{{ cart_qty }}"
+            data-min="{{ product.selected_or_first_available_variant.quantity_rule.min }}"
+            min="{{ product.selected_or_first_available_variant.quantity_rule.min }}"
+            {% if product.selected_or_first_available_variant.quantity_rule.max != null %}
+              data-max="{{ product.selected_or_first_available_variant.quantity_rule.max }}"
+              max="{{ product.selected_or_first_available_variant.quantity_rule.max }}"
+            {% endif %}
+            step="{{ product.selected_or_first_available_variant.quantity_rule.increment }}"
+            value="{{ product.selected_or_first_available_variant.quantity_rule.min }}"
+            form="{{ product_form_id }}"
+          >
+          <button class="quantity__button" name="plus" type="button">
+            <span class="visually-hidden">
+              {{- 'products.product.quantity.increase' | t: product: product.title | escape -}}
+            </span>
+            {% render 'icon-plus' %}
+          </button>
+        </quantity-input>
+      </div>
+
+      <!-- Add to Cart button -->
+      <button class="buy-button" type="button" name="add" id="buy-button-{{ product.id }}">Add To Cart</button>
+    </div>
+  {% endfor %}
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Handle color variant click
+ // Handle color swatch click
+document.addEventListener('click', function(event) {
+    if (event.target.matches('.custom-swatches-list .color-swatch')) {
+        let imageSource = event.target.getAttribute('data-image-source');
+        let productItem = event.target.closest('.product-item');
+
+        // Update product image
+        let productImage = productItem.querySelector('.product-image');
+        if (productImage && imageSource) {
+            productImage.src = imageSource;
+        }
+
+        // Remove 'active' class from all color swatches
+        productItem.querySelectorAll('.custom-swatches-list .color-swatch').forEach(function(swatch) {
+            swatch.classList.remove('active');
+        });
+
+        // Add 'active' class to the clicked color swatch
+        event.target.classList.add('active');
+
+        // Trigger the update for combined color and size variant selection
+        updateVariantId(productItem);
+    }
+});
+
+// Handle size variant click
+document.addEventListener('click', function(event) {
+    if (event.target.matches('.size-options-list .size-option')) {
+        let productItem = event.target.closest('.product-item');
+
+        // Remove 'active' class from all size options
+        productItem.querySelectorAll('.size-options-list .size-option').forEach(function(option) {
+            option.classList.remove('active');
+        });
+
+        // Add 'active' class to the clicked size option
+        event.target.classList.add('active');
+
+        // Trigger the update for combined color and size variant selection
+        updateVariantId(productItem);
+    }
+});
+
+// Function to update hidden input with the correct variant ID based on selected color and size
+function updateVariantId(productItem) {
+    // Get the active color swatch value
+    let activeColorSwatch = productItem.querySelector('.custom-swatches-list .color-swatch.active');
+    let colorValue = activeColorSwatch ? activeColorSwatch.getAttribute('data_color').trim().toLowerCase() : '';
+
+    // Get the active size option value
+    let activeSizeOption = productItem.querySelector('.size-options-list .size-option.active');
+    let sizeValue = activeSizeOption ? activeSizeOption.getAttribute('data_size').trim().toLowerCase() : '';
+
+    // Combine the color and size values
+    let combinedValue = (sizeValue && colorValue) ? (sizeValue + ' / ' + colorValue).trim() : (sizeValue || colorValue).trim();
+    console.log('Combined Value:', combinedValue);
+
+    // Get all the variants from the product item
+    let variantDivs = productItem.querySelectorAll('div[data][data_title]');
+  
+    console.log('Total Variants Found:', variantDivs);
+
+    // Iterate over the hidden variant data and compare with the combined value
+    let matchingVariantId = '';
+
+    // Handle case when there's only one variant
+    if (variantDivs.length === 1) {
+        matchingVariantId = variantDivs[0].getAttribute('data');
+        console.log('Only one variant available, selecting variant ID:', matchingVariantId);
+    } else {
+        // If there are multiple variants, compare combined value with variant data_title
+        variantDivs.forEach(function(variantDiv) {
+            let variantDataTitle = variantDiv.getAttribute('data_title').trim().toLowerCase();
+            console.log('Comparing combined value:', combinedValue, 'with variant title:', variantDataTitle);
+
+            // Compare the combined value with the variant title
+            if (variantDataTitle === combinedValue) {
+                matchingVariantId = variantDiv.getAttribute('data');
+                console.log('Matching variant found:', matchingVariantId);
+            }
+        });
+    }
+
+    // Update hidden input with the matching variant ID
+    let hiddenInput = productItem.querySelector('#variant-id-' + productItem.id.split('-')[1]);
+    if (hiddenInput && matchingVariantId) {
+        hiddenInput.value = matchingVariantId;
+        console.log('Updated hidden input with matching variant ID:', matchingVariantId);
+    } else if (!matchingVariantId) {
+        console.log('No matching variant found for the selected color and size.');
+    }
+}
+
+
+
+
+  // Handle Add to Cart button click
+  document.addEventListener('click', function(event) {
+    if (event.target.matches('.buy-button')) {
+      let productItem = event.target.closest('.product-item');
+      let hiddenInput = productItem.querySelector('#variant-id-' + productItem.id.split('-')[1]);
+      let variantId = hiddenInput ? hiddenInput.value : '';
+
+      // Default quantity to 1 if not found
+      let quantityInput = productItem.querySelector('.quantity__input');
+      let quantity = quantityInput ? quantityInput.value : 1;
+
+      // Check if variantId is set (indicating color/size selections are valid)
+      if (!variantId) {
+        alert('Please select a variant before adding to the cart.');
+        return;
+      }
+
+      console.log('Variant ID:', variantId);
+      console.log('Quantity:', quantity);
+
+      // Send request to add the selected variant to the cart
+      fetch('/cart/add.js', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          quantity: parseInt(quantity, 10),
+          id: variantId
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log('Success:', data);
+        alert('Product added to cart!');
+        // Optionally refresh the cart or update the UI
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('There was an error adding the product to the cart.');
+      });
+    }
+  });
+});
+
+
